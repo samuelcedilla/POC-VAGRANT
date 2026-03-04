@@ -1,0 +1,66 @@
+1. Ir al proyecto (WSL)
+cd /mnt/c/Users/samuel/POC-VAGRANT   # entrar en la carpeta del proyecto
+
+2. Levantar las máquinas
+vagrant.exe up                       # crear y arrancar las VMs
+vagrant.exe up --provider=virtualbox # arrancar usando VirtualBox explícitamente
+
+3. Parar las máquinas
+vagrant.exe halt                     # apagar todas las VMs
+vagrant.exe halt ubu1                # apagar solo VM1
+vagrant.exe halt ubu2                # apagar solo VM2
+
+4. Suspender / reanudar máquinas
+vagrant.exe suspend                  # suspender las VMs (como hibernar)
+vagrant.exe resume                   # volver a activarlas
+
+5. Eliminar máquinas
+vagrant.exe destroy                  # borrar las VMs (pregunta antes)
+vagrant.exe destroy -f               # borrar las VMs sin preguntar
+
+6. Ver estado de las máquinas
+vagrant.exe status                   # ver si las VMs están running, stopped, etc.
+
+7. Conectarse por SSH a las VMs
+vagrant.exe ssh ubu1                 # entrar en VM1
+vagrant.exe ssh ubu2                 # entrar en VM2
+
+Salir de la VM:
+
+exit                                 # salir de la máquina virtual
+
+8. Puertos usados en la práctica
+8443 → HTTPS alternativo (Windows → VM1 nginx)
+8080 → HTTP del servidor Python (VM2)
+
+Flujo real:
+
+Browser
+  ↓
+https://localhost:8443
+  ↓
+VM1 (nginx 443)
+  ↓
+proxy_pass
+  ↓
+VM2 (python http.server 8080)
+
+9. Crear página web que servirá VM2
+mkdir -p html                        # crear carpeta html
+cat > html/index.html <<'EOF'        # crear archivo index.html
+<h1>Hola desde VM2 (ubu2)</h1>
+<p>Si ves esto entrando por https en VM1, el reverse proxy funciona.</p>
+EOF
+
+10. Comandos útiles extra
+vagrant.exe reload                   # reiniciar VM y aplicar cambios de red/provision
+vagrant.exe provision                # volver a ejecutar los scripts de provisioning
+vagrant.exe ssh-config               # ver configuración SSH de la VM
+
+11. Ruta del proyecto
+Windows:
+C:\Users\samuel\POC-VAGRANT
+WSL:
+/mnt/c/Users/samuel/POC-VAGRANT
+
+Es la misma carpeta, solo cambia la forma de escribir la ruta
