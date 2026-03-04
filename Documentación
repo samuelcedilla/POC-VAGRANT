@@ -1,0 +1,130 @@
+1) Instalar WSL (Windows)
+
+Abre PowerShell (Administrador)
+Ejecuta:
+wsl --install
+Reinicia si te lo pide.
+Abre WSL (Ubuntu) desde el menú Inicio y crea tu usuario (por ejemplo samuel) y contraseña.
+Cuando lo tengas, podrás entrar a WSL desde PowerShell con:
+wsl
+
+2) Instalar Git en WSL
+
+Dentro de WSL (Ubuntu):
+
+sudo apt update
+sudo apt install -y git
+git --versión
+
+3) Instalar VirtualBox y Vagrant (en Windows)
+
+Esto se instala en Windows, no en WSL:
+Instala VirtualBox
+Instala Vagrant
+Luego comprueba en PowerShell:
+
+vagrant --version
+VBoxManage --version
+
+4) Preparar carpeta del proyecto
+
+Entra a WSL desde PowerShell:
+wsl
+Dentro de WSL ve a tu usuario de Windows:
+cd /mnt/c/Users/samuel
+
+5) Clonar el repositorio (con WSL)
+
+En WSL:
+git clone https://github.com/joseantoniogp00/POC-VAGRANT.git
+cd POC-VAGRANT
+
+Ahora el proyecto está físicamente en:
+Windows: C:\Users\samuel\POC-VAGRANT
+WSL: /mnt/c/Users/samuel/POC-VAGRANT
+
+6) Usar Vagrant de Windows desde WSL
+
+En WSL, comprueba:
+vagrant.exe --version
+Importante: usaremos vagrant.exe, no vagrant (para evitar el Vagrant “Linux” y el tema libvirt).
+
+7) Crear el Vagrantfile de la práctica
+
+En WSL, dentro del repo:
+
+nano Vagrantfile
+Borra lo que haya y pega este Vagrantfile mínimo y funcional:
+
+# VM1 (nginx HTTPS) -> VM2 (python http.server:8080)
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+
+  # VM1: Reverse proxy HTTPS (443)
+  config.vm.define "ubu1" do |vm1|
+    vm1.vm.hostname = "ubu1"
+    vm1.vm.network "private_network", ip: "192.168.56.10"
+    vm1.vm.network "forwarded_port", guest: 443, host: 8443, auto_correct: true
+
+    vm1.vm.provision "shell", inline: <<-SHELL
+      set -e
+      apt-get update -y
+      apt-get install -y nginx openssl
+
+      mkdir -p /etc/nginx/ssl
+      openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/self.key \
+        -out   /etc/nginx/ssl/self.crt \
+        -subj  "/CN=ubu1"
+
+      cat > /etc/nginx/sites-available/proxy <<'NGINX'
+server {
+  listen 443 ssl;
+  ssl_certificate     /etc/nginx/ssl/self.crt;
+  ssl_certificate_key /etc/nginx/ssl/self.key;
+
+  location / {
+    proxy_pass http://192.168.56.11:8080;
+  }
+}
+NGINX
+
+      rm -f /etc/nginx/sites-enabled/default
+      ln -sf /etc/nginx/sites-available/proxy /etc/nginx/sites-enabled/proxy
+      nginx -t
+      systemctl restart nginx
+    SHELL
+  end
+
+  # VM2: App HTTP (8080)
+  config.vm.define "ubu2" do |vm2|
+    vm2.vm.hostname = "ubu2"
+    vm2.vm.network "private_network", ip: "192.168.56.11"
+
+    vm2.vm.provision "shell", inline: <<-SHELL
+      set -e
+      apt-get update -y
+      apt-get install -y python3
+
+      mkdir -p /var/www/app
+      cat > /var/www/app/index.html <<'HTML'
+<h1>Hola desde VM2 (ubu2)</h1>
+<p>Si ves esto desde https://localhost:8443, nginx hace de reverse proxy.</p>
+HTML
+
+      nohup python3 -m http.server 8080 --bind 0.0.0.0 --directory /var/www/app >/tmp/app.log 2>&1 &
+    SHELL
+  end
+end
+
+Guarda y sal:
+
+8) Arrancar las máquinas
+
+En WSL, dentro del proyecto:
+vagrant.exe up --provider=virtualbox
+
+Esto crea las VMs en VirtualBox, configura redes ,instala nginx/Python y arranca servicios
+
+Comprueba estado:
+vagrant.exe status
