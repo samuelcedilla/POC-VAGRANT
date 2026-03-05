@@ -1,0 +1,78 @@
+0) Requisitos
+
+En WSL Ubuntu:
+
+sudo apt update
+sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients dnsmasq-base virt-manager
+
+Instalar plugin de Vagrant para libvirt:
+
+vagrant plugin install vagrant-libvirt
+
+Añadir usuario a los grupos necesarios:
+
+sudo usermod -aG libvirt,kvm $USER
+newgrp libvirt
+
+Activar libvirt:
+
+sudo systemctl enable --now libvirtd
+
+1) Crear carpeta del laboratorio
+
+mkdir -p ~/iac-lab
+cd ~/iac-lab
+
+2) Añadir la box
+
+vagrant box add generic/ubuntu2204 --provider=libvirt
+
+3) Crear el Vagrantfile
+
+nano Vagrantfile
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/ubuntu2204"
+
+  ENV["VAGRANT_DEFAULT_PROVIDER"] = "libvirt"
+
+  LAB_NET = "192.168.56"
+
+  # VM1 - PROXY
+  config.vm.define "vm1" do |vm|
+    vm.vm.hostname = "vm1"
+    vm.vm.network "private_network", ip: "#{LAB_NET}.11"
+
+    vm.vm.network "forwarded_port", guest: 8443, host: 8443, auto_correct: true
+
+    vm.vm.provider :libvirt do |libvirt|
+      libvirt.memory = 1024
+      libvirt.cpus = 1
+      libvirt.machine_type = "q35"
+    end
+  end
+
+  # VM2 - WEB
+  config.vm.define "vm2" do |vm|
+    vm.vm.hostname = "vm2"
+    vm.vm.network "private_network", ip: "#{LAB_NET}.12"
+
+    vm.vm.provider :libvirt do |libvirt|
+      libvirt.memory = 1024
+      libvirt.cpus = 1
+      libvirt.machine_type = "q35"
+    end
+  end
+
+end
+
+4) Arrancar las máquinas
+
+cd ~/iac-lab
+export VAGRANT_DEFAULT_PROVIDER=libvirt
+vagrant up --no-parallel
+
+5) Acceder al servicio
+
+Abrir en el navegador:
+http://localhost:8443
+http://172.28.231.45:8443
