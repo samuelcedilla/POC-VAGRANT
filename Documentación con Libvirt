@@ -33,64 +33,34 @@ nano Vagrantfile
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu2204"
 
-  LAB_NET = "192.168.56"
-
-  # VM WEB
   config.vm.define "vm2" do |vm|
-    vm.vm.hostname = "web"
-    vm.vm.network "private_network", ip: "#{LAB_NET}.12"
-
-    vm.vm.provider :libvirt do |libvirt|
-      libvirt.memory = 1024
-      libvirt.cpus = 1
-    end
+    vm.vm.network "private_network", ip: "192.168.56.12"
 
     vm.vm.provision "shell", inline: <<-SHELL
-      sudo apt update
-      sudo apt install -y nginx
-
-      echo "<h1>Servidor WEB funcionando</h1>" | sudo tee /var/www/html/index.html
-
-      sudo systemctl enable nginx
-      sudo systemctl restart nginx
+      echo "<h1>Servidor WEB funcionando</h1>" > /home/vagrant/index.html
+      nohup python3 -m http.server 80 --directory /home/vagrant >/home/vagrant/web.log 2>&1 &
     SHELL
   end
 
-
-  # VM PROXY
   config.vm.define "vm1" do |vm|
-    vm.vm.hostname = "proxy"
-    vm.vm.network "private_network", ip: "#{LAB_NET}.11"
-
-    # abrir puerto hacia tu PC
+    vm.vm.network "private_network", ip: "192.168.56.11"
     vm.vm.network "forwarded_port", guest: 8443, host: 8443
 
-    vm.vm.provider :libvirt do |libvirt|
-      libvirt.memory = 1024
-      libvirt.cpus = 1
-    end
-
     vm.vm.provision "shell", inline: <<-SHELL
-      sudo apt update
-      sudo apt install -y nginx
-
-      sudo rm -f /etc/nginx/sites-enabled/default
-
-      sudo tee /etc/nginx/conf.d/proxy.conf <<EOF
+      apt update
+      apt install -y nginx
+      rm -f /etc/nginx/sites-enabled/default
+      cat > /etc/nginx/conf.d/proxy.conf <<EOF
 server {
     listen 8443;
-
     location / {
         proxy_pass http://192.168.56.12;
     }
 }
 EOF
-
-      sudo systemctl enable nginx
-      sudo systemctl restart nginx
+      systemctl restart nginx
     SHELL
   end
-
 end
 
 4) Arrancar las máquinas
