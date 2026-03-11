@@ -1,0 +1,89 @@
+0) Requisitos
+En WSL Ubuntu:
+
+sudo apt update
+sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients dnsmasq-base virt-manager
+
+Instalar plugin de Vagrant para libvirt:
+vagrant plugin install vagrant-libvirt
+
+Añadir usuario a los grupos necesarios:
+sudo usermod -aG libvirt,kvm $USER
+newgrp libvirt
+
+Activar libvirt:
+sudo systemctl enable --now libvirtd
+
+1) Crear carpeta del laboratorio
+mkdir -p ~/iac-lab
+cd ~/iac-lab
+
+2) Añadir la box
+vagrant box add generic/ubuntu2204 --provider=libvirt
+
+3) Crear el Vagrantfile
+nano Vagrantfile
+(Esta versión aísla el servidor web y usa descubrimiento activo de red mediante un escáner en Bash, eliminando por completo DNS o dependencias como Avahi):
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/ubuntu2204"
+
+  # 1. vm2
+  config.vm.define "vm2" do |vm|
+    vm.vm.provision "shell", inline: <<-SHELL
+      echo "<h1>Servidor WEB funcionando</h1>" > /home/vagrant/index.html
+      
+      cat > /etc/systemd/system/python-web.service <<EOF
+[Unit]
+Description=Servidor Web Python
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 80 --directory /home/vagrant
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+      systemctl enable --now python-web.service
+    SHELL
+  end
+
+  # 2. vm1
+  config.vm.define "vm1" do |vm|
+    vm.vm.network "forwarded_port", guest: 8443, host: 8443, host_ip: "0.0.0.0"
+    
+    vm.vm.provision "shell", inline: <<-SHELL
+      SUBNET=$(hostname -I | awk '{print $1}' | cut -d. -f1-3)
+      
+      for i in {2..254}; do
+        if timeout 0.2 bash -c "</dev/tcp/${SUBNET}.${i}/80" 2>/dev/null; then
+          VM2_IP="${SUBNET}.${i}"
+          break
+        fi
+      done
+      
+      apt update && apt install -y nginx
+      rm -f /etc/nginx/sites-enabled/default
+      
+      cat > /etc/nginx/conf.d/proxy.conf <<EOF
+server {
+    listen 8443;
+    location / {
+        proxy_pass http://$VM2_IP;
+    }
+}
+EOF
+      systemctl restart nginx
+    SHELL
+  end
+end
+
+4) Arrancar las máquinas
+Es obligatorio usar el flag --no-parallel para garantizar que la primera máquina haya encendido por completo su servidor web en el puerto 80 ANTES de que el script de la segunda máquina comience a escanear la red buscándolo.
+export VAGRANT_DEFAULT_PROVIDER=libvirt
+vagrant up --no-parallel
+
+5) Acceder al servicio
+Abrir en el navegador de Windows:
+http://localhost:8443
+http://<IP_DE_WSL>:8443 (Ejemplo: http://172.28.231.45:8443)
